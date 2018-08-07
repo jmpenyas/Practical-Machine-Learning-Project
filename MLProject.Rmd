@@ -1,0 +1,108 @@
+---
+title: "MLProject"
+author: "José Manuel Peñas"
+date: "6 de agosto de 2018"
+output: 
+html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: 2
+
+---
+```{r setup, include=FALSE}
+library(ggplot2);library(caret);library(dplyr);library(rpart);library(rattle);
+library(randomForest);require(RLightGBM)
+```
+
+# Overview
+
+
+# Analysis
+
+## Obtaining & preparing the data
+
+```{r dataGetting}
+if (!file.exists("./data/training.csv")) {
+      download.file(
+      "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+      "./data/training.csv"
+      )
+      
+}
+train <-
+read.csv("./data/training.csv",
+na.strings = c("NA", "#DIV/0!", ""))
+
+if (!file.exists("./data/testing.csv")) {
+download.file(
+"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+"./data/testing.csv"
+)
+
+
+}
+test <-
+read.csv("./data/testing.csv",
+na.strings = c("NA", "#DIV/0!", "")
+)
+```
+Separating on training and validation set.
+
+```{r separation}
+set.seed(9125)
+inTrain <- createDataPartition(y = train$classe, p = .6, list = F)
+training <- train[inTrain,]
+validation <- train[-inTrain,]
+str(training)
+dim(training)
+dim(validation)
+```
+
+Removing zero covariates
+
+```{r cleaningPredictors}
+nsv <- nearZeroVar(training)
+training <- training[, -c(nsv,c(1:5))]
+validation <- validation[, -c(nsv,c(1:5))]
+```
+
+Removing data with more than 75 % of NAs and
+```{r removingNAs}
+rNas <- colMeans(is.na(training))
+training<- training [,rNas < .75 ]
+validation <- validation[,rNas < .75]
+dim(training)
+dim(validation)
+```
+
+## Prediction Models
+
+### Decission Tree
+```{r tree}
+treeModel <- rpart(classe ~ ., data=training, method="class")
+fancyRpartPlot(treeModel)
+predTree <- predict(treeModel, newdata = validation, type="class")
+confusionMatrix(predTree, validation$classe)
+```
+### Random Forest
+```{r rf, cache=T}
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+rfModel <- randomForest(classe~.,data=training, trControl=trctrl, proximity=T)
+predRF <- predict(rfModel, newdata = validation, type="class")
+confusionMatrix(predRF, validation$classe)
+```
+### SVM
+```{r gbm, cache=T}
+trctrl2 <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+model <- caret
+gbmModel <- train(classe~.,data=training, trControl=trctrl2, method="gbm")
+predGBM <- predict(gbmModel, newdata = validation)
+confusionMatrix(predGBM, validation$classe)
+```
+# Conclussions
+
+You can also embed plots, for example:
+
+
+
+
