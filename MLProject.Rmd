@@ -1,7 +1,7 @@
 ---
 title: "MLProject"
 author: "José Manuel Peñas"
-date: "6 de agosto de 2018"
+date: "August 2018"
 output: 
 html_document:
     df_print: paged
@@ -9,18 +9,20 @@ html_document:
     toc_depth: 2
 
 ---
-```{r setup, include=FALSE}
-library(ggplot2);library(caret);library(dplyr);library(rpart);library(rattle);
-library(randomForest);require(RLightGBM)
-```
-
 # Overview
 
+This document presents three different machine-learning models that predicts if the movement collected by different type of sensors is correct or incorrect.
+It is based on the data obtained by a experiment created by *Wallace Ugulino, Débora Cardador, Katia Vega, Eduardo Velloso, Ruy Milidiú and Hugo Fuks from Pontifical Catholic University of Rio de Janeiro, Informatics Department and School of Computing and Communications, Lancaster University, UK*.
+The experiments collected information from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Every way was classified by a letter **A**, **B**, **C**, **D** & **E**.
 
-# Analysis
+# Obtaining & preparing the data
+First,  the required libraries for the execution of the R code are loaded.
+```{r setup, results='hide', message=FALSE, warning=F}
+library(caret);library(dplyr);library(rpart);library(rattle);library(randomForest);library(gbm)
 
-## Obtaining & preparing the data
+```
 
+Then, both csv's are obtained and all possible NA's values are processed.
 ```{r dataGetting}
 if (!file.exists("./data/training.csv")) {
       download.file(
@@ -45,28 +47,33 @@ test <-
 read.csv("./data/testing.csv",
 na.strings = c("NA", "#DIV/0!", "")
 )
+dim(train);dim(test)
 ```
-Separating on training and validation set.
+Then, train data set is separated on training and validation data set in order to avoid over-fitting problems. The percentile chosen is **60 %** as the dataset is pretty big; 19.000 rows with 160 columns.
 
-```{r separation}
+```{r separation, cache=T}
 set.seed(9125)
 inTrain <- createDataPartition(y = train$classe, p = .6, list = F)
 training <- train[inTrain,]
 validation <- train[-inTrain,]
-str(training)
 dim(training)
 dim(validation)
+str(training)
+
 ```
+As we see the result of the STR command, the dataset contains several columns with hardly any impact on the outcome: low covariation or too many NA's.
+First we are going to remove the zero covariates with cared function **nearZeroVar**. It will be applied so on training set as the validation set.
+Besides, the 5 first columns with information about the executor and the time when the exercise is done has been removed as the experiment's design discarded this as relevant.
 
-Removing zero covariates
-
-```{r cleaningPredictors}
+```{r cleaningPredictors, cache=T}
 nsv <- nearZeroVar(training)
 training <- training[, -c(nsv,c(1:5))]
 validation <- validation[, -c(nsv,c(1:5))]
+dim(training)
+dim(validation)
 ```
-
-Removing data with more than 75 % of NAs and
+36 columns have been removed for non covariation.
+Now, the columns with more than 75 % of NAs will be removed as well as they hardly interacts with the outcome with all that missing information.
 ```{r removingNAs}
 rNas <- colMeans(is.na(training))
 training<- training [,rNas < .75 ]
@@ -74,34 +81,79 @@ validation <- validation[,rNas < .75]
 dim(training)
 dim(validation)
 ```
+Finally, the training and validation data sets will be processed with 1 outcome **classe** and 53 predictors. 
+# Prediction Models
+The outcome is a category or a factor so we are facing a classification problem.
+The best prediction algorithms to this case should be **Decision Trees** and **Random Forest**. Additionally as its behavior is pretty good and ensembles very easy with other models: Gradient Boosting Machine(GBM) will be applied.
+## Decision Tree
+First, the Decision Tree model is created with **rpart** function and the tree nodes and branches are shown:
 
-## Prediction Models
 
-### Decission Tree
-```{r tree}
+```{r tree, cache=T}
 treeModel <- rpart(classe ~ ., data=training, method="class")
 fancyRpartPlot(treeModel)
+```
+Now, the X-Validation info is shown and the prediction model is appled to the validation set and the confusion Matrix is obtained:
+```{r treeInfo}
+plotcp(treeModel)
 predTree <- predict(treeModel, newdata = validation, type="class")
 confusionMatrix(predTree, validation$classe)
 ```
-### Random Forest
+It has a 73 % accuracy that is not really so good. We will test with the other algorithms.
+## Random Forest
+The next, and possible the most popular, model for classification problems is Random Forest that bassicaly is a combination of Decission Trees and outputs the class that is the mode of the classes. 
+**randomForest** functon will be used with a trainControl of *repeatedcv* for an increased cross validation.
 ```{r rf, cache=T}
 trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 rfModel <- randomForest(classe~.,data=training, trControl=trctrl, proximity=T)
 predRF <- predict(rfModel, newdata = validation, type="class")
 confusionMatrix(predRF, validation$classe)
+
 ```
-### SVM
+Surprisingly, the accuracy is incredibly high **99.75 %**, being the 95% confidence interval over the **99 %**. 
+This model seems to be the one to choose.
+
+## Gradient Boosting 
+After the result obtained with Random Forest, this step should not be necessary. 
+Anyway, we are going to generate and apply **GBM** model and check three results.
+
 ```{r gbm, cache=T}
-trctrl2 <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
-model <- caret
-gbmModel <- train(classe~.,data=training, trControl=trctrl2, method="gbm")
+trctrl2 <-
+      trainControl(method = "repeatedcv",
+                   number = 10,
+                   repeats = 3)
+gbmModel <-
+      train(
+            classe ~ .,
+            data = training,
+            trControl = trctrl2,
+            method = "gbm",
+            verbose = F
+      )
 predGBM <- predict(gbmModel, newdata = validation)
 confusionMatrix(predGBM, validation$classe)
-```
-# Conclussions
 
-You can also embed plots, for example:
+```
+The accuracy is pretty high, **98.89%** but a few cents lower than Random Forest.
+
+## Assembling models
+This point should show how to ensemble the 3 proposed models and getting a new one more powerful and accurate.
+However, it's not necessary with the accuracy reported by **Random Forest**: **99.75**.
+This will be the model to use.  
+
+# Results
+Finally, the **Random Forest** is going to be applied to the testing data set but it has be applied the same cleaning and transformations performed on training and validation sets.
+```{r cleaningTest}
+test <- test[, -c(nsv,c(1:5))]
+test <- test[,rNas < .75]
+dim(test)
+```
+Finally, the predictions over cleaned test set are the following:
+```{r prediction}
+predTest<- predict(rfModel, newdata=test)
+predTest
+```
+
 
 
 

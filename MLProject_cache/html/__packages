@@ -6,3 +6,5 @@ dplyr
 rpart
 rattle
 randomForest
+survival
+gbm
