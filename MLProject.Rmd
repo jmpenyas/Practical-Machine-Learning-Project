@@ -4,22 +4,20 @@ author: "José Manuel Peñas"
 date: "August 2018"
 output: 
 html_document:
-    df_print: paged
-    toc: yes
-    toc_depth: 2
     keep_md: true 
 
 ---
 # Overview
 
-This document presents three different machine-learning models that predicts if the movement collected by different type of sensors is correct or incorrect.
+This document presents three different machine-learning models that predicts whether the movement collected by different type of sensors is correct or incorrect.
 It is based on the data obtained by a experiment created by *Wallace Ugulino, Débora Cardador, Katia Vega, Eduardo Velloso, Ruy Milidiú and Hugo Fuks from Pontifical Catholic University of Rio de Janeiro, Informatics Department and School of Computing and Communications, Lancaster University, UK*.
-The experiments collected information from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Every way was classified by a letter **A**, **B**, **C**, **D** & **E**.
+The experiments collected information from accelerometers on the belt, forearm, arm and dumbell of 6 participants of same age and healthiness. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Every way was classified by a letter **A**, **B**, **C**, **D** & **E**.
+The algorithms that will be applied will try to get the more accurate possible results.
 
 # Obtaining & preparing the data
 First,  the required libraries for the execution of the R code are loaded.
 ```{r setup, results='hide', message=FALSE, warning=F}
-library(caret);library(dplyr);library(rpart);library(rattle);library(randomForest);library(gbm)
+library(caret);library(dplyr);library(rpart);library(rattle);library(randomForest);library(gbm);library(corrplot)
 
 ```
 
@@ -82,10 +80,18 @@ validation <- validation[,rNas < .75]
 dim(training)
 dim(validation)
 ```
-Finally, the training and validation data sets will be processed with 1 outcome **classe** and 53 predictors. 
+Finally, the training and validation data sets will be processed with 1 outcome: **classe** and 53 predictors. 
+Just before of the creation the prediction models, a correlation analysis will be performed to check if **Principal Components Analysis (PCA)** is needed to work only with non-correlated variables.
+```{r correlation, cache=T}
+corrplot(cor(training[,-54]))
+```
+
+There is not enough correlations to apply **PCA**, so the data won't be preprocessed.
+
 # Prediction Models
 The outcome is a category or a factor so we are facing a classification problem.
 The best prediction algorithms to this case should be **Decision Trees** and **Random Forest**. Additionally as its behavior is pretty good and ensembles very easy with other models: Gradient Boosting Machine(GBM) will be applied.
+
 ## Decision Tree
 First, the Decision Tree model is created with **rpart** function and the tree nodes and branches are shown:
 
@@ -101,6 +107,7 @@ predTree <- predict(treeModel, newdata = validation, type="class")
 confusionMatrix(predTree, validation$classe)
 ```
 It has a 73 % accuracy that is not really so good. We will test with the other algorithms.
+
 ## Random Forest
 The next, and possible the most popular, model for classification problems is Random Forest that bassicaly is a combination of Decission Trees and outputs the class that is the mode of the classes. 
 **randomForest** functon will be used with a trainControl of *repeatedcv* for an increased cross validation.
